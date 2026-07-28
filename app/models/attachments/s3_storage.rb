@@ -63,6 +63,14 @@ class Attachments::S3Storage
   # Frative: builds a presigned PUT URL instead of a presigned POST policy.
   # The URL itself carries the full signature (as query params), so no
   # extra form fields/policy document are needed on the client side.
+  #
+  # NB: lib/api/v1/attachment.rb#api_attachment_preflight slices the JSON
+  # returned to the client down to just :upload_url, :upload_params, and
+  # :file_param — any other top-level key (upload_method, key, bucket, even
+  # success_url) gets silently dropped. Everything the client needs to
+  # detect the PUT flow and finalize the upload has to live inside
+  # upload_params instead (same trick upstream already uses to smuggle
+  # success_url through for the POST flow).
   def initialize_ajax_upload_params(_local_upload_url, s3_success_url, options)
     sanitized_filename = attachment.full_filename.tr("+", " ")
     expires_in = (options[:expiration] || Attachment::S3_EXPIRATION_TIME).to_i
@@ -73,12 +81,14 @@ class Attachments::S3Storage
     )
     {
       upload_url: presigned_url,
-      upload_method: "PUT",
       file_param: "file",
       success_url: s3_success_url,
-      upload_params: {},
-      key: sanitized_filename,
-      bucket: bucket.name
+      upload_params: {
+        "upload_method" => "PUT",
+        "success_url" => s3_success_url,
+        "key" => sanitized_filename,
+        "bucket" => bucket.name
+      }
     }
   end
 

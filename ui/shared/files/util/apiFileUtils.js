@@ -31,10 +31,12 @@ function createFormData(data) {
 function onFileUploadInfoReceived(file, uploadInfo, onSuccess, onFailure) {
   // Frative: some S3-compatible backends (e.g. Cloudflare R2) only support
   // presigned PUT, not presigned POST — the preflight already returns a
-  // fully-signed upload_url in that case. See notes/canvas-fork-estrategia.md
-  // in frative-docs.
+  // fully-signed upload_url in that case. upload_method travels inside
+  // upload_params, not as a top-level field — the server-side JSON is
+  // sliced down to upload_url/upload_params/file_param only. See
+  // notes/canvas-fork-estrategia.md in frative-docs.
   const upload =
-    uploadInfo.upload_method === 'PUT'
+    uploadInfo.upload_params?.upload_method === 'PUT'
       ? axios.put(uploadInfo.upload_url, file, {
           headers: {'Content-Type': file.type || 'application/octet-stream', ...stringIds},
         })

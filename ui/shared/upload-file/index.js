@@ -152,8 +152,11 @@ export function completeUpload(preflightResponse, file, options = {}) {
   // presigned PUT, not presigned POST. In that case the preflight response
   // already carries a fully-signed upload_url and no form fields are needed
   // — the file is sent as a raw PUT body instead of multipart/form-data.
+  // The preflight JSON is sliced server-side to only upload_url/upload_params
+  // /file_param (see api_attachment_preflight), so upload_method/key/bucket
+  // travel inside upload_params rather than as top-level fields.
   // See notes/canvas-fork-estrategia.md in frative-docs.
-  const isPresignedPut = preflightResponse.upload_method === 'PUT'
+  const isPresignedPut = upload_params.upload_method === 'PUT'
 
   let upload
   if (isPresignedPut) {
@@ -196,7 +199,7 @@ export function completeUpload(preflightResponse, file, options = {}) {
       // these params (see FilesController#api_create_success), so we just
       // need to ping success_url to finalize.
       location = success_url
-      query = {bucket: preflightResponse.bucket, key: preflightResponse.key}
+      query = {bucket: upload_params.bucket, key: upload_params.key}
     } else if (success_url) {
       // s3 upload, follow-up at success_url with s3 data to finalize
       const {Bucket, Key, ETag} = response.data
