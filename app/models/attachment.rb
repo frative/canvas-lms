@@ -692,6 +692,19 @@ class Attachment < ApplicationRecord
     # Build the data that will be needed for the user to upload to s3
     # without us being the middle-man
     sanitized_filename = full_filename.tr("+", " ")
+    options[:datetime] = Time.now.utc.strftime("%Y%m%dT%H%M%SZ")
+
+    # Frative: storage backends that only support presigned PUT (e.g.
+    # Cloudflare R2) return a fully-signed upload_url with nothing else to
+    # add — skip the presigned-POST policy/signature building below, which
+    # doesn't apply to PUT. See notes/canvas-fork-estrategia.md.
+    if store.class.respond_to?(:upload_method) && store.class.upload_method == :put
+      res = store.initialize_ajax_upload_params(local_upload_url, s3_success_url, options)
+      res[:id] = id
+      res[:upload_params] ||= {}
+      return res
+    end
+
     policy = {
       "expiration" => (options[:expiration] || S3_EXPIRATION_TIME).from_now.utc.iso8601,
       "conditions" => [
@@ -705,7 +718,6 @@ class Attachment < ApplicationRecord
     # We don't use a Aws::S3::PresignedPost object to build this for us because
     # there is no way to add custom parameters to the condition, like we do
     # with `extras` below.
-    options[:datetime] = Time.now.utc.strftime("%Y%m%dT%H%M%SZ")
     res = store.initialize_ajax_upload_params(local_upload_url, s3_success_url, options)
     policy = store.amend_policy_conditions(policy, datetime: options[:datetime])
 

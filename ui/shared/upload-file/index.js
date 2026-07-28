@@ -148,21 +148,37 @@ export function completeUpload(preflightResponse, file, options = {}) {
   upload_params = upload_params || {}
   success_url = success_url || upload_params.success_url
   const isToS3 = !!success_url
+  // Frative: some S3-compatible backends (e.g. Cloudflare R2) only support
+  // presigned PUT, not presigned POST. In that case the preflight response
+  // already carries a fully-signed upload_url and no form fields are needed
+  // — the file is sent as a raw PUT body instead of multipart/form-data.
+  // See notes/canvas-fork-estrategia.md in frative-docs.
+  const isPresignedPut = preflightResponse.upload_method === 'PUT'
 
-  // post upload
-  // xsslint xssable.receiver.whitelist formData
-  const formData = new FormData()
-  Object.entries(upload_params).forEach(([key, value]) => formData.append(key, value))
-  if (file) {
-    formData.append(file_param, file, options.filename)
+  let upload
+  if (isPresignedPut) {
+    upload = ajaxLib.put(upload_url, file, {
+      headers: {'Content-Type': (file && file.type) || 'application/octet-stream'},
+      onUploadProgress: options.onProgress,
+      withCredentials: false,
+      ...ajaxLibOptions,
+    })
+  } else {
+    // post upload
+    // xsslint xssable.receiver.whitelist formData
+    const formData = new FormData()
+    Object.entries(upload_params).forEach(([key, value]) => formData.append(key, value))
+    if (file) {
+      formData.append(file_param, file, options.filename)
+    }
+
+    upload = ajaxLib.post(upload_url, formData, {
+      responseType: isToS3 ? 'document' : 'json',
+      onUploadProgress: options.onProgress,
+      withCredentials: !isToS3,
+      ...ajaxLibOptions,
+    })
   }
-
-  const upload = ajaxLib.post(upload_url, formData, {
-    responseType: isToS3 ? 'document' : 'json',
-    onUploadProgress: options.onProgress,
-    withCredentials: !isToS3,
-    ...ajaxLibOptions,
-  })
 
   // finalize upload
   return upload.catch(fileUploadFailed).then(response => {
@@ -173,7 +189,15 @@ export function completeUpload(preflightResponse, file, options = {}) {
     }
     let location,
       query = {}
-    if (success_url) {
+    if (isPresignedPut && success_url) {
+      // Frative: presigned PUT upload. There's no S3-generated XML body to
+      // read (like the POST flow gets), and the server re-verifies the
+      // uploaded object directly against the bucket rather than trusting
+      // these params (see FilesController#api_create_success), so we just
+      // need to ping success_url to finalize.
+      location = success_url
+      query = {bucket: preflightResponse.bucket, key: preflightResponse.key}
+    } else if (success_url) {
       // s3 upload, follow-up at success_url with s3 data to finalize
       const {Bucket, Key, ETag} = response.data
       location = success_url

@@ -89,6 +89,13 @@ class ExternalContentFileSubmissionView extends ExternalContentHomeworkSubmissio
   sendCallbackUrl(responseData) {
     const uploadUrl = responseData.data.upload_url
     if (uploadUrl) {
+      // Frative TODO: this path handles LTI "submit file by URL" content
+      // items (Canvas clones the file server-side from `preflightData.url`
+      // in uploadFileFromUrl below) and wasn't confirmed to actually carry
+      // browser-side file bytes to PUT when upload_url is present. Left
+      // unpatched pending investigation — see notes/canvas-fork-estrategia.md.
+      // If this ever fires against the R2 backend it will still 501, same
+      // as before the fork's PUT patch.
       const formData = new FormData()
       const uploadParams = responseData.data.upload_params
 

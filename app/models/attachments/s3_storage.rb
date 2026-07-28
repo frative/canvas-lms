@@ -24,6 +24,13 @@ class Attachments::S3Storage
     :s3
   end
 
+  # Frative: some S3-compatible backends (e.g. Cloudflare R2) don't implement
+  # presigned POST (used by the upstream Canvas direct-to-S3 upload flow),
+  # only presigned PUT. See notes/canvas-fork-estrategia.md in frative-docs.
+  def self.upload_method
+    :put
+  end
+
   def initialize(attachment)
     @attachment = attachment
   end
@@ -53,12 +60,25 @@ class Attachments::S3Storage
     end
   end
 
+  # Frative: builds a presigned PUT URL instead of a presigned POST policy.
+  # The URL itself carries the full signature (as query params), so no
+  # extra form fields/policy document are needed on the client side.
   def initialize_ajax_upload_params(_local_upload_url, s3_success_url, options)
+    sanitized_filename = attachment.full_filename.tr("+", " ")
+    expires_in = (options[:expiration] || Attachment::S3_EXPIRATION_TIME).to_i
+    presigned_url = bucket.object(sanitized_filename).presigned_url(
+      :put,
+      expires_in:,
+      acl: "private"
+    )
     {
-      upload_url: bucket.url,
+      upload_url: presigned_url,
+      upload_method: "PUT",
       file_param: "file",
       success_url: s3_success_url,
-      upload_params: cred_params(options[:datetime])
+      upload_params: {},
+      key: sanitized_filename,
+      bucket: bucket.name
     }
   end
 

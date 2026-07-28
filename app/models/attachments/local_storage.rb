@@ -24,6 +24,11 @@ class Attachments::LocalStorage
     :file_system
   end
 
+  # Frative: kept explicit alongside Attachments::S3Storage#upload_method.
+  def self.upload_method
+    :post
+  end
+
   def initialize(attachment)
     @attachment = attachment
   end

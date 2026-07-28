@@ -29,12 +29,21 @@ function createFormData(data) {
 }
 
 function onFileUploadInfoReceived(file, uploadInfo, onSuccess, onFailure) {
-  const formData = createFormData({...uploadInfo.upload_params, file})
-  const config = {'Content-Type': 'multipart/form-data', ...stringIds}
-  axios
-    .post(uploadInfo.upload_url, formData, config)
-    .then(response => onSuccess(response.data))
-    .catch(response => onFailure(response))
+  // Frative: some S3-compatible backends (e.g. Cloudflare R2) only support
+  // presigned PUT, not presigned POST — the preflight already returns a
+  // fully-signed upload_url in that case. See notes/canvas-fork-estrategia.md
+  // in frative-docs.
+  const upload =
+    uploadInfo.upload_method === 'PUT'
+      ? axios.put(uploadInfo.upload_url, file, {
+          headers: {'Content-Type': file.type || 'application/octet-stream', ...stringIds},
+        })
+      : axios.post(uploadInfo.upload_url, createFormData({...uploadInfo.upload_params, file}), {
+          'Content-Type': 'multipart/form-data',
+          ...stringIds,
+        })
+
+  upload.then(response => onSuccess(response.data)).catch(response => onFailure(response))
 }
 
 export function uploadFile(file, folderId, onSuccess, onFailure) {
