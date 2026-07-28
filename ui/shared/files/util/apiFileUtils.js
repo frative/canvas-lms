@@ -28,19 +28,50 @@ function createFormData(data) {
   return formData
 }
 
+// Frative: axios (@canvas/axios) attaches global default headers (Accept,
+// X-Requested-With) to every request, including cross-origin ones. Some
+// S3-compatible storage CORS policies (e.g. a Cloudflare R2 bucket only
+// allowing the `content-type` header) reject the PUT because of those extra
+// headers, even with a valid presigned URL — the browser blocks it before
+// it reaches R2. Raw XHR sends only the header we explicitly set.
+//
+// Also, unlike the classic S3 presigned-POST flow (which auto-redirects to
+// success_url as part of the POST response, transparently followed by
+// axios — no separate JS step needed), a PUT has no such mechanism, so we
+// have to ping success_url ourselves once the upload completes. See
+// notes/canvas-fork-estrategia.md in frative-docs.
+function presignedPutUpload(url, file, successUrl, bucket, key) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (successUrl) {
+          const qs = new URLSearchParams({bucket, key})
+          const sep = successUrl.includes('?') ? '&' : '?'
+          axios
+            .get(successUrl + sep + qs.toString())
+            .then(response => resolve(response))
+            .catch(reject)
+        } else {
+          resolve({data: {}})
+        }
+      } else {
+        reject(new Error(`Upload failed with status ${xhr.status}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('Network Error'))
+    xhr.send(file)
+  })
+}
+
 function onFileUploadInfoReceived(file, uploadInfo, onSuccess, onFailure) {
-  // Frative: some S3-compatible backends (e.g. Cloudflare R2) only support
-  // presigned PUT, not presigned POST — the preflight already returns a
-  // fully-signed upload_url in that case. upload_method travels inside
-  // upload_params, not as a top-level field — the server-side JSON is
-  // sliced down to upload_url/upload_params/file_param only. See
-  // notes/canvas-fork-estrategia.md in frative-docs.
+  const params = uploadInfo.upload_params || {}
   const upload =
-    uploadInfo.upload_params?.upload_method === 'PUT'
-      ? axios.put(uploadInfo.upload_url, file, {
-          headers: {'Content-Type': file.type || 'application/octet-stream', ...stringIds},
-        })
-      : axios.post(uploadInfo.upload_url, createFormData({...uploadInfo.upload_params, file}), {
+    params.upload_method === 'PUT'
+      ? presignedPutUpload(uploadInfo.upload_url, file, params.success_url, params.bucket, params.key)
+      : axios.post(uploadInfo.upload_url, createFormData({...params, file}), {
           'Content-Type': 'multipart/form-data',
           ...stringIds,
         })

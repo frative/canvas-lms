@@ -61,6 +61,37 @@ function postUploadFailed(err) {
   return Promise.reject(err)
 }
 
+// Frative: the shared axios instance (@canvas/axios) sets global default
+// headers (Accept, X-Requested-With — see ui/shared/axios/index.js) that
+// get attached to every request it makes, including cross-origin ones. Some
+// S3-compatible storage CORS policies (e.g. a Cloudflare R2 bucket
+// configured to only allow the `content-type` header) reject the actual PUT
+// because of those extra headers, even though the presigned URL itself is
+// valid — the browser blocks it before it ever reaches R2, which looks
+// identical to a network/CORS failure from the caller's side. Raw XHR (no
+// axios defaults) sends only the header we explicitly set, and still
+// supports upload progress, unlike a bare fetch(). See
+// notes/canvas-fork-estrategia.md in frative-docs.
+function presignedPutUpload(url, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', (file && file.type) || 'application/octet-stream')
+    if (onProgress) {
+      xhr.upload.onprogress = onProgress
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve({status: xhr.status})
+      } else {
+        reject(new Error(`Upload failed with status ${xhr.status}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('Network Error'))
+    xhr.send(file)
+  })
+}
+
 /*
  * preflightUrl: usually something like
  *   `/api/v1/courses/:course_id/files` or
@@ -160,12 +191,7 @@ export function completeUpload(preflightResponse, file, options = {}) {
 
   let upload
   if (isPresignedPut) {
-    upload = ajaxLib.put(upload_url, file, {
-      headers: {'Content-Type': (file && file.type) || 'application/octet-stream'},
-      onUploadProgress: options.onProgress,
-      withCredentials: false,
-      ...ajaxLibOptions,
-    })
+    upload = presignedPutUpload(upload_url, file, options.onProgress)
   } else {
     // post upload
     // xsslint xssable.receiver.whitelist formData
