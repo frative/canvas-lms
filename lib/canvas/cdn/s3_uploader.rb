@@ -29,9 +29,13 @@ module Canvas
         @folder = folder
         @verbose = verbose
         @config = Canvas::Cdn.config
+        # Frative: S3-compatible backends other than AWS (e.g. Cloudflare R2)
+        # need an explicit endpoint override, or the SDK defaults to the real
+        # AWS S3 endpoint. See notes/canvas-fork-estrategia.md in frative-docs.
         @s3 = Aws::S3::Resource.new(access_key_id: config.aws_access_key_id,
                                     secret_access_key: config.aws_secret_access_key,
-                                    region: config.region)
+                                    region: config.region,
+                                    endpoint: config.endpoint)
         @bucket = @s3.bucket(config.bucket)
         @mutex = Mutex.new
       end

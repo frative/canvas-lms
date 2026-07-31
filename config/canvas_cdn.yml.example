@@ -4,6 +4,9 @@ defaults: &defaults
   # bucket: "name of the s3 bucket to push things to"
   # aws_access_key_id: "secret aws_access_key_id that has write access to that bucket"
   # aws_secret_access_key: "secret_access_key for that access_key_id"
+  # endpoint: "override for S3-compatible backends other than AWS, eg Cloudflare R2:
+  #             https://<account_id>.r2.cloudflarestorage.com (region: auto). See
+  #             notes/canvas-fork-estrategia.md in frative-docs for context."
 
 development:
   <<: *defaults
