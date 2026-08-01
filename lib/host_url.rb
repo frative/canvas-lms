@@ -62,8 +62,23 @@ class HostUrl
       @@protocol
     end
 
-    def context_host(_context = nil, _current_host = nil)
-      default_host
+    # Frative: prefer the context's own root account domain (via AccountDomain)
+    # when it has one, so URLs generated for a customer's root account point
+    # at their own domain instead of the single global default_host. Falls
+    # back to default_host, preserving stock Canvas behavior otherwise.
+    def context_host(context = nil, _current_host = nil)
+      root_account = root_account_for_context(context)
+      custom_domain = root_account && !root_account.site_admin? ? root_account.account_domains.first&.domain : nil
+      custom_domain || default_host
+    end
+
+    def root_account_for_context(context)
+      return nil unless context
+
+      account = context.is_a?(Account) ? context : (context.try(:root_account) || context.try(:account))
+      account&.root_account
+    rescue StandardError
+      nil
     end
 
     def context_hosts(context = nil, current_host = nil)

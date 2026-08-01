@@ -25,6 +25,12 @@ Rails.root.glob("{gems,vendor}/plugins/*/config/pre_routes.rb") do |pre_routes|
 end
 
 CanvasRails::Application.routes.draw do
+  # Frative: internal-only provisioning endpoint (bearer token, not a public API,
+  # not in openapi.json) used by miaula-core-backend's Cloudflare Workflow to
+  # create a root account per customer, since Workers can't SSH to run
+  # `bin/rails runner`.
+  post "/internal/root_accounts", to: "internal/root_accounts#create"
+
   # Test-only routes for Selenium tests with mock LTI tool
   if Rails.env.test?
     post "/test/mock_lti/ui", to: "test/mock_lti#ui"

@@ -43,7 +43,8 @@ class LoadAccount
 
   def call(env)
     self.class.check_schema_cache
-    domain_root_account = ::LoadAccount.default_domain_root_account
+    hostname = env["HTTP_HOST"]&.split(":")&.first
+    domain_root_account = ::LoadAccount.default_domain_root_account(hostname)
     configure_for_root_account(domain_root_account)
 
     env["canvas.domain_root_account"] = domain_root_account
@@ -52,8 +53,14 @@ class LoadAccount
     clear_caches
   end
 
-  def self.default_domain_root_account
-    Account.default
+  # Frative: resolve the root account by request hostname via AccountDomain
+  # (Canvas OSS has no domain-based multi-tenancy out of the box — this table
+  # is Frative-specific). Falls back to Account.default when there's no match,
+  # so the original single-domain behavior is preserved for unmapped hosts.
+  def self.default_domain_root_account(hostname = nil)
+    return Account.default if hostname.blank?
+
+    AccountDomain.find_by(domain: hostname)&.account || Account.default
   end
 
   def self.infer_shard(_hostname)
