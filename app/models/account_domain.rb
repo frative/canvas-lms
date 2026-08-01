@@ -24,14 +24,18 @@
 # introduced so each customer can have its own root account with its own
 # authentication_provider, reachable at its own domain.
 class AccountDomain < ApplicationRecord
-  belongs_to :account
+  belongs_to :root_account, class_name: "Account"
 
   validates :domain, presence: true, uniqueness: true, length: { maximum: 255 }
   validate :account_must_be_root_account
 
+  # keep the natural `.account` name available for callers (AccountDomain
+  # always points at a root account, so this is just an alias)
+  alias_method :account, :root_account
+
   private
 
   def account_must_be_root_account
-    errors.add(:account, "must be a root account") if account && !account.root_account?
+    errors.add(:root_account, "must be a root account") if root_account && !root_account.root_account?
   end
 end

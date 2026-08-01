@@ -22,7 +22,7 @@ class CreateAccountDomains < ActiveRecord::Migration[8.0]
 
   def change
     create_table :account_domains do |t|
-      t.references :account, null: false, foreign_key: true
+      t.references :root_account, null: false, foreign_key: { to_table: :accounts }
       t.string :domain, null: false, limit: 255
       t.timestamps
 

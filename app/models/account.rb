@@ -38,7 +38,7 @@ class Account < ApplicationRecord
   belongs_to :parent_account, class_name: "Account"
 
   has_many :courses
-  has_many :account_domains
+  has_many :account_domains, foreign_key: :root_account_id, inverse_of: :root_account
   has_many :custom_grade_statuses, inverse_of: :root_account, foreign_key: :root_account_id
   has_many :standard_grade_statuses, inverse_of: :root_account, foreign_key: :root_account_id
   has_many :favorites, inverse_of: :root_account
