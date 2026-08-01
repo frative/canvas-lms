@@ -119,7 +119,11 @@ class HostUrl
 
     def is_file_host?(domain)
       safer_host = file_host(Account.default)
-      safer_host != default_host && domain == safer_host
+      return false if safer_host == default_host
+
+      # exact match, or the per-attachment sharded subdomain used when
+      # attachment_specific_file_domain is enabled (e.g. "a1-29.files.miaula.app")
+      domain == safer_host || (domain.end_with?(".#{safer_host}") && domain.match?(/\Aa\d+-\d+\./))
     end
 
     def has_file_host?
