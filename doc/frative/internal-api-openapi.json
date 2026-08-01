@@ -1,0 +1,88 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Canvas (Frative fork) — internal provisioning API",
+    "version": "1.0.0",
+    "description": "Not part of the public Canvas API. Bearer-token-protected, called only by miaula-core-backend's ProvisionCanvasInstance Workflow. See doc/frative/internal-api.md."
+  },
+  "servers": [{ "url": "https://admin.miaula.app" }],
+  "paths": {
+    "/internal/root_accounts": {
+      "post": {
+        "summary": "Create a root account + its domain mapping",
+        "description": "Idempotent by (name, domain) — a retry with the same pair returns the existing account instead of erroring.",
+        "security": [{ "internalBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "domain"],
+                "properties": {
+                  "name": { "type": "string", "example": "Acme Inc." },
+                  "domain": { "type": "string", "example": "acme.miaula.app" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "integer", "example": 12 },
+                    "uuid": { "type": "string" },
+                    "domain": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "200": { "description": "Already existed with the same name — idempotent replay, same shape as 201" },
+          "400": { "description": "name or domain missing" },
+          "401": { "description": "Missing or invalid bearer token" },
+          "409": { "description": "domain already in use by a different name" }
+        }
+      }
+    },
+    "/internal/authentication_providers/{id}/prioritize": {
+      "post": {
+        "summary": "Make this provider the account's default login",
+        "description": "Calls AuthenticationProvider#insert_at(1) directly — the public API's `position` param on create isn't reliably honored.",
+        "security": [{ "internalBearer": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 13 }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reordered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "id": { "type": "integer" }, "position": { "type": "integer", "example": 1 } }
+                }
+              }
+            }
+          },
+          "401": { "description": "Missing or invalid bearer token" },
+          "404": { "description": "No active authentication_provider with that id" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "internalBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "ENV[\"INTERNAL_PROVISIONING_TOKEN\"] — distinct from CANVAS_API_TOKEN, not a Canvas access token."
+      }
+    }
+  }
+}

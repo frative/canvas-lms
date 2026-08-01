@@ -30,6 +30,7 @@ CanvasRails::Application.routes.draw do
   # create a root account per customer, since Workers can't SSH to run
   # `bin/rails runner`.
   post "/internal/root_accounts", to: "internal/root_accounts#create"
+  post "/internal/authentication_providers/:id/prioritize", to: "internal/authentication_providers#prioritize"
 
   # Test-only routes for Selenium tests with mock LTI tool
   if Rails.env.test?

@@ -22,11 +22,7 @@
 # used only by miaula-core-backend's provisioning Workflow to create a root
 # account (with its own domain) per customer.
 module Internal
-  class RootAccountsController < ActionController::Base
-    skip_before_action :verify_authenticity_token, raise: false
-
-    before_action :require_internal_token
-
+  class RootAccountsController < BaseController
     def create
       name = params[:name].to_s.strip
       domain = params[:domain].to_s.strip.downcase
@@ -35,7 +31,16 @@ module Internal
         return render json: { error: "name and domain are required" }, status: :bad_request
       end
 
-      if AccountDomain.exists?(domain:)
+      # Idempotent: the calling Workflow step can retry after a transient error even
+      # though the previous attempt actually succeeded (no idempotency key from the
+      # caller yet) — if this exact (name, domain) pair already exists, return it
+      # instead of erroring, so the retry can proceed to the next step.
+      existing = AccountDomain.find_by(domain:)
+      if existing
+        if existing.root_account.name == name
+          account = existing.root_account
+          return render json: { id: account.id, uuid: account.uuid, domain: }, status: :ok
+        end
         return render json: { error: "domain already in use" }, status: :conflict
       end
 
@@ -43,17 +48,6 @@ module Internal
       account.account_domains.create!(domain:)
 
       render json: { id: account.id, uuid: account.uuid, domain: }, status: :created
-    end
-
-    private
-
-    def require_internal_token
-      expected = ENV["INTERNAL_PROVISIONING_TOKEN"]
-      provided = request.headers["Authorization"].to_s.delete_prefix("Bearer ")
-
-      return if expected.present? && ActiveSupport::SecurityUtils.secure_compare(expected, provided)
-
-      render json: { error: "unauthorized" }, status: :unauthorized
     end
   end
 end
