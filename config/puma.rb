@@ -18,7 +18,12 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
-threads 0, 1
+threads ENV.fetch("PUMA_MIN_THREADS", 0).to_i, ENV.fetch("PUMA_MAX_THREADS", 1).to_i
+
+# Worker count is per-instance (depends on available cores, whether the
+# machine also runs jobs/redis, etc), so it's left unset by default and only
+# enabled when PUMA_WORKERS is provided via the service's environment.
+workers ENV.fetch("PUMA_WORKERS").to_i if ENV["PUMA_WORKERS"]
 
 if ENV["RAILS_ENV"] == "production"
   # Phased restart cannot be used if `preload_app` is enabled
