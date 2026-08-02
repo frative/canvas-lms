@@ -30,6 +30,11 @@ module Users
     end
 
     def dispatch!(user, pseudonym, channel)
+      # Frative: SSO-managed pseudonyms (see Pseudonym#passwordable?) have no native
+      # password to set — the "confirm your registration / set a password" email this
+      # method would otherwise send is meaningless and shouldn't be sent. See doc/frative/README.md.
+      return false unless pseudonym.passwordable?
+
       if is_self_registration?
         send_self_registration_email(pseudonym)
         return true

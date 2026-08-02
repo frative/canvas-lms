@@ -68,7 +68,7 @@ class Pseudonym < ApplicationRecord
             inclusion: { in: %w[administrative observer staff student student_other teacher] }
 
   before_save :set_password_changed
-  before_validation :infer_defaults, :verify_unique_sis_user_id, :verify_unique_integration_id
+  before_validation :assign_default_sso_provider, :infer_defaults, :verify_unique_sis_user_id, :verify_unique_integration_id
   after_save :update_account_associations_if_account_changed
   has_a_broadcast_policy
 
@@ -353,6 +353,18 @@ class Pseudonym < ApplicationRecord
 
   def confirmation_code
     (communication_channel || user.communication_channel).confirmation_code
+  end
+
+  # Frative: pseudonyms created without an explicit authentication_provider (e.g. via the
+  # People UI or SIS import) default to Canvas password auth even when the account has SSO
+  # configured (see passwordable?/managed_password? above). Auto-assigning the account's
+  # prioritized non-canvas provider here means every new login is SSO-managed unless a
+  # provider was explicitly chosen — see doc/frative/README.md.
+  def assign_default_sso_provider
+    return if authentication_provider_id.present?
+    return unless new_record? && account&.non_canvas_auth_configured?
+
+    self.authentication_provider = account.authentication_providers.active.first
   end
 
   def infer_defaults

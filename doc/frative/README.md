@@ -16,6 +16,28 @@ Together, those rule out "one shared Canvas instance with subaccounts + a shared
 - **`HostUrl.context_host` patch** (`lib/host_url.rb`) — generates URLs (emails, links) against a context's own domain when it has one, instead of always the single global `default_host`.
 - **Internal API** (`app/controllers/internal/`, see [`internal-api.md`](./internal-api.md) and [`internal-api-openapi.json`](./internal-api-openapi.json)) — two bearer-token-protected endpoints, not part of the public Canvas API, called only by `miaula-core-backend`'s provisioning Workflow.
 
+## SSO-only pseudonyms don't get a native password flow
+
+When a root account has a non-Canvas `authentication_provider` configured (i.e. it's one of
+our SSO-managed tenants), any new `Pseudonym` created without an explicit provider — via the
+People UI, SIS import, or the public API — is auto-assigned that account's prioritized
+provider instead of defaulting to Canvas password auth (`Pseudonym#assign_default_sso_provider`,
+`app/models/pseudonym.rb`). Once a pseudonym is SSO-managed (`passwordable?` returns `false`),
+`Users::CreationNotifyPolicy#dispatch!` (`app/models/users/creation_notify_policy.rb`) skips
+sending the "confirm your registration / set a password" email entirely — that flow (native
+password creation, unrelated to OIDC) is meaningless once native login is de-prioritized to
+break-glass, and exposing it just invites students to set a password nobody should be using.
+
+This only changes behavior for pseudonyms that would otherwise be SSO-managed; accounts using
+native Canvas password auth (no OIDC provider registered) are unaffected — `passwordable?`
+stays `true` for them, same as stock Canvas.
+
+Note: a temporary random password hash is still generated and stored for every pseudonym
+(`crypted_password` is `NOT NULL` at the schema level, a foundational Canvas column) — this is
+inert (nobody knows it, it's never surfaced, and native login remains break-glass-only), so
+this doesn't attempt to avoid storing it, only to stop inviting users into a pointless
+password-setup flow.
+
 ## Why an internal API instead of the public one
 
 `miaula-core-backend` orchestrates provisioning from a Cloudflare Workflow, which can't SSH into `calisto-canvas-puma` to run `bin/rails runner` — every action has to be a plain HTTP call. Two things needed doing that the public Canvas API either can't do at all, or doesn't do reliably:
