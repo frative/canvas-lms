@@ -26,8 +26,14 @@ threads ENV.fetch("PUMA_MIN_THREADS", 0).to_i, ENV.fetch("PUMA_MAX_THREADS", 1).
 workers ENV.fetch("PUMA_WORKERS").to_i if ENV["PUMA_WORKERS"]
 
 if ENV["RAILS_ENV"] == "production"
-  # Phased restart cannot be used if `preload_app` is enabled
-  preload_app! false
+  # preload_app! true: el master bootea Rails una sola vez y los workers se
+  # crean con fork(), compartiendo memoria por copy-on-write. Reduce RAM
+  # agregada frente a que cada worker booteé la app de cero (medido en
+  # frative-apps-prod 2026-08-09: ~750-830MB privados por worker sin esto).
+  # Trade-off asumido explícitamente: se pierde "phased restart" (reinicio
+  # sin downtime worker-por-worker) — decisión tomada en ventana de
+  # mantenimiento, 2026-08-09.
+  preload_app! true
 
   worker_boot_timeout 240 # seconds
 end
