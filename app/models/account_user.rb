@@ -38,6 +38,8 @@ class AccountUser < ApplicationRecord
   after_destroy :update_account_associations_later
   after_save :clear_user_cache
   after_save :update_account_associations_if_changed
+  # Frative: admin status is part of the member mirror in miaula-core-backend (lib/core_sync.rb).
+  after_commit -> { CoreSync.enqueue(root_account_id, user_id) }
   after_update_commit :audit_log_deletion, if: -> { saved_change_to_workflow_state? && workflow_state == "deleted" }
 
   validate :valid_role?, unless: :deleted?

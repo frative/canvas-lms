@@ -70,9 +70,23 @@ class Pseudonym < ApplicationRecord
   before_save :set_password_changed
   before_validation :assign_default_sso_provider, :infer_defaults, :verify_unique_sis_user_id, :verify_unique_integration_id
   after_save :update_account_associations_if_account_changed
+  # Frative: mirror login changes to miaula-core-backend's members (see lib/core_sync.rb).
+  # Only identity-relevant changes — last_login_at & co. are updated on every login.
+  after_commit :enqueue_core_sync
   has_a_broadcast_policy
 
   alias_attribute :root_account_id, :account_id
+
+  def enqueue_core_sync
+    relevant = previously_new_record? || destroyed? ||
+               saved_change_to_unique_id? || saved_change_to_workflow_state? ||
+               saved_change_to_user_id? || saved_change_to_account_id?
+    return unless relevant
+
+    CoreSync.enqueue(account_id, user_id)
+    CoreSync.enqueue(account_id, user_id_before_last_save) if saved_change_to_user_id? && user_id_before_last_save
+    CoreSync.enqueue(account_id_before_last_save, user_id) if saved_change_to_account_id? && account_id_before_last_save
+  end
 
   alias_method :context, :account
 
