@@ -159,8 +159,11 @@ class BrandConfig < ApplicationRecord
     BrandableCSS.all_brand_variable_values_as_css(self)
   end
 
+  # Frative: public/dist is mounted read-only in production (assets are built
+  # locally and served from the CDN), so brand files are staged in a writable
+  # tmp dir and uploaded to the same remote path under dist/brandable_css.
   def public_brand_dir
-    BrandableCSS.public_brandable_css_folder.join(md5)
+    Rails.root.join("tmp/brandable_css", md5)
   end
 
   def public_folder
@@ -188,7 +191,7 @@ class BrandConfig < ApplicationRecord
       return unless Canvas::Cdn.enabled?
 
       begin
-        s3_uploader.upload_file(send(:"public_#{type}_path"))
+        s3_uploader.upload_file(send(:"public_#{type}_path"), local_path: send(:"#{type}_file"))
         File.delete(send(:"#{type}_file"))
       rescue Errno::ENOENT
         # Another process already uploaded and cleaned up this file

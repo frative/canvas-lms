@@ -102,10 +102,10 @@ module Canvas
         options
       end
 
-      def upload_file(remote_path)
+      def upload_file(remote_path, local_path: nil)
         return if previous_manifest.include?(remote_path)
 
-        local_path = Pathname.new("#{Rails.public_path}/#{remote_path}")
+        local_path = Pathname.new(local_path || "#{Rails.public_path}/#{remote_path}")
         return if (local_path.extname == ".gz") || local_path.directory?
 
         s3_object = mutex.synchronize { bucket.object(remote_path) }
