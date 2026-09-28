@@ -559,12 +559,12 @@ class User < ApplicationRecord
   before_save :record_acceptance_of_terms
   after_save :update_account_associations_if_necessary
   after_save :self_enroll_if_necessary
-  # Frative: name and deletion are part of the member mirror in miaula-core-backend
-  # (lib/core_sync.rb) — one sync per root account the user has a login in.
-  after_commit :enqueue_core_sync, if: -> { saved_change_to_name? || saved_change_to_workflow_state? }
+  # Frative: name and deletion are part of the member mirror in miaula-orgs-backend
+  # (lib/orgs_sync.rb) — one sync per root account the user has a login in.
+  after_commit :enqueue_orgs_sync, if: -> { saved_change_to_name? || saved_change_to_workflow_state? }
 
-  def enqueue_core_sync
-    Pseudonym.where(user_id: id).distinct.pluck(:account_id).each { |root_account_id| CoreSync.enqueue(root_account_id, id) }
+  def enqueue_orgs_sync
+    Pseudonym.where(user_id: id).distinct.pluck(:account_id).each { |root_account_id| OrgsSync.enqueue(root_account_id, id) }
   end
 
   def courses_for_enrollments(enrollment_scope, associated_user = nil, include_completed_courses: true)

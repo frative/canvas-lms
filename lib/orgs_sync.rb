@@ -18,26 +18,26 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Frative: pushes the state of a Canvas user within one root account to
-# miaula-core-backend (POST /internal/canvas-sync/users), which mirrors every
+# miaula-orgs-backend (POST /internal/canvas-sync/users), which mirrors every
 # organization's Canvas users as `member` rows. Triggered from after_commit hooks on
 # Pseudonym, AccountUser and User, so it covers every creation path (UI, API, SIS,
 # self-registration). The job reads the *current* state when it runs, so coalescing or
 # replaying it is harmless; usage-tracker's hourly reconciliation catches anything lost.
-module CoreSync
+module OrgsSync
   MAX_ATTEMPTS = 8
 
   class DeliveryError < StandardError; end
 
   class << self
     def enabled?
-      ENV["CORE_BASE_URL"].present? && ENV["INTERNAL_PROVISIONING_TOKEN"].present?
+      ENV["ORGS_BASE_URL"].present? && ENV["INTERNAL_PROVISIONING_TOKEN"].present?
     end
 
     def enqueue(root_account_id, user_id)
       return unless enabled? && root_account_id && user_id
 
       delay_if_production(
-        singleton: "core_sync:#{root_account_id}:#{user_id}",
+        singleton: "orgs_sync:#{root_account_id}:#{user_id}",
         max_attempts: MAX_ATTEMPTS
       ).sync_user(root_account_id, user_id)
     end
@@ -81,13 +81,13 @@ module CoreSync
 
     def deliver(path, payload)
       response = CanvasHttp.post(
-        "#{ENV["CORE_BASE_URL"].chomp("/")}#{path}",
+        "#{ENV["ORGS_BASE_URL"].chomp("/")}#{path}",
         { "Authorization" => "Bearer #{ENV["INTERNAL_PROVISIONING_TOKEN"]}" },
         body: payload.to_json,
         content_type: "application/json"
       )
       # Raising makes the delayed job retry (up to MAX_ATTEMPTS, with backoff).
-      raise DeliveryError, "core sync failed: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+      raise DeliveryError, "orgs sync failed: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
     end
   end
 end
