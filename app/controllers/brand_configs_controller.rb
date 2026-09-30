@@ -257,6 +257,10 @@ class BrandConfigsController < ApplicationController
   end
 
   def upload_file(file)
+    # R2 no soporta ACLs por objeto, así que el bucket de archivos (privado) no
+    # puede servir el logo sin firmar: se sube al bucket público de la CDN.
+    return upload_file_to_cdn(file) if Canvas::Cdn.enabled?
+
     expires_in = 15.years
     attachment = Attachment.new(attachment_options: {
                                   s3_access: "public-read",
@@ -273,5 +277,18 @@ class BrandConfigsController < ApplicationController
     else
       attachment.public_url
     end
+  end
+
+  def upload_file_to_cdn(file)
+    body = file.read
+    filename = File.basename(file.original_filename.to_s).gsub(/[^\w.\-]/, "_")
+    key = "brand_assets/account_#{@account.id}/#{Digest::SHA256.hexdigest(body)[0, 16]}/#{filename}"
+    Canvas::Cdn::S3Uploader.new.bucket.object(key).put(
+      body:,
+      acl: "public-read",
+      content_type: file.content_type.presence || Rack::Mime.mime_type(File.extname(filename)),
+      cache_control: "public, max-age=#{1.year.to_i}"
+    )
+    "#{Canvas::Cdn.config.host}/#{key}"
   end
 end
